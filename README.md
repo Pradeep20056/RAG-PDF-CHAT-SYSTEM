@@ -10,11 +10,16 @@ A comprehensive web application that allows users to upload PDF documents, chat 
 - Vector embedding generation using sentence transformers
 - Support for large PDF documents
 
-### 💬 **AI Chat Interface**
-- RAG-powered question answering about PDF content
-- Real-time chat with AI assistant
-- Source attribution for answers
-- Fallback to vector similarity search when OpenAI is unavailable
+### 💬 **Enhanced AI Chat Interface**
+- **Gemini Integration**: Powered by Google's Gemini models for intelligent, conversational responses
+- **Friendly AI Assistant**: Chat with a warm, helpful AI that responds like a friend
+- **🎤 Voice Input**: Speak your questions using your microphone - just click and talk!
+- **🔊 Voice Output**: AI responses are automatically spoken back to you
+- **PDF Text Display**: View extracted PDF content in a scrollable text area for reference
+- **Copy Functionality**: Copy AI responses and PDF text with one click
+- **Conversation Memory**: AI remembers context from previous messages for better interactions
+- **Source Attribution**: See exactly which pages your answers come from
+- **Smart Fallback**: Automatic fallback to similarity search if Gemini is unavailable
 
 ### 🎨 **Interactive Whiteboard**
 - Drawing tools (pen, shapes, text)
@@ -33,6 +38,7 @@ A comprehensive web application that allows users to upload PDF documents, chat 
 ### Backend
 - **FastAPI** - Modern Python web framework
 - **LangChain** - RAG and LLM orchestration
+- **Google Gemini** - Advanced AI models for conversational responses
 - **ChromaDB** - Vector database for embeddings
 - **Sentence Transformers** - Text embedding generation
 - **PyPDF2** - PDF text extraction
@@ -49,6 +55,13 @@ A comprehensive web application that allows users to upload PDF documents, chat 
 - Python 3.8+
 - Node.js 16+
 - npm or yarn
+- **Modern Web Browser** with Web Speech API support:
+  - Chrome/Chromium (recommended)
+  - Edge
+  - Safari (limited support)
+  - Firefox (limited support)
+- **Microphone access** for voice input
+- **Audio output** for voice responses
 
 ## Installation
 
@@ -74,6 +87,10 @@ pip install -r requirements.txt
 
 # Set up environment variables
 cp env_example.txt .env
+
+# Add your Gemini API key to .env file
+# Get your API key from: https://makersuite.google.com/app/apikey
+echo "GEMINI_API_KEY=your_actual_gemini_api_key_here" >> .env
 # Edit .env file with your OpenAI API key (optional)
 ```
 
@@ -99,6 +116,31 @@ The application will be available at:
 - Frontend: http://localhost:3000
 - Backend API: http://localhost:8000
 
+## Testing the Integration
+
+### Test Backend API
+```bash
+# Run the test script to verify Gemini integration
+python test_gemini_integration.py
+```
+
+This will test:
+- ✅ Health check endpoint
+- ✅ PDF upload and processing
+- ✅ PDF text extraction
+- ✅ Chat functionality with Gemini
+- ✅ Conversation memory and context
+
+### Manual Testing
+1. **Start Backend**: `cd backend && python main.py`
+2. **Start Frontend**: `cd frontend && npm start`
+3. **Upload PDF**: Drag and drop a PDF file
+4. **Start Chatting**: Ask questions like:
+   - "Hey, what's this document about?"
+   - "Can you help me understand this concept?"
+   - "What are the main takeaways?"
+   - "I'm confused about this part, can you help?"
+
 ## Usage
 
 ### 1. Upload PDF
@@ -113,8 +155,17 @@ The application will be available at:
 
 ### 3. Chat with AI
 - Go to the Chat tab
-- Ask questions about your PDF content
-- Get AI-powered answers with source references
+- **🎤 Voice Input**: Click the microphone icon to speak your questions
+- **🔊 Voice Output**: AI responses are automatically spoken (toggle with volume icon)
+- **View PDF Text**: Click "Show PDF Text" to see extracted content
+- **Friendly Chat**: Ask questions in a conversational way:
+  - "Hey, what's this document about?"
+  - "Can you help me understand this concept?"
+  - "I'm confused about this part, can you help?"
+- **Copy Responses**: Click the copy icon to save AI responses
+- **Replay Messages**: Click the speaker icon on any AI message to hear it again
+- **Source References**: See which pages your answers come from
+- **Conversation Memory**: AI remembers context from previous messages
 
 ### 4. Use Whiteboard
 - Access the Whiteboard tab

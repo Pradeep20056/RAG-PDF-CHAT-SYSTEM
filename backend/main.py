@@ -45,6 +45,7 @@ app.add_middleware(
 documents = []
 vector_store = None
 qa_chain = None
+conversation_history = []  # Store conversation context
 
 class ChatMessage(BaseModel):
     message: str
@@ -130,10 +131,34 @@ async def upload_pdf(file: UploadFile = File(...)):
                         continue
                 
                 if llm:
+                    # Create a more conversational prompt template
+                    from langchain.prompts import PromptTemplate
+                    
+                    # Enhanced prompt for more friendly, conversational responses
+                    prompt_template = """You are a helpful and friendly AI assistant who loves to help users understand their PDF documents. 
+                    You should respond in a conversational, warm, and engaging manner - like talking to a friend who's genuinely interested in helping.
+                    
+                    Use the following pieces of context from the PDF document to answer the user's question in a helpful and friendly way.
+                    If you don't know the answer based on the context, just say so in a friendly manner and suggest what they might ask instead.
+                    
+                    Context from PDF:
+                    {context}
+                    
+                    Question: {question}
+                    
+                    Friendly Response:"""
+                    
+                    PROMPT = PromptTemplate(
+                        template=prompt_template, 
+                        input_variables=["context", "question"]
+                    )
+                    
                     qa_chain = RetrievalQA.from_chain_type(
                         llm=llm,
                         chain_type="stuff",
-                        retriever=vector_store.as_retriever(search_kwargs={"k": 3})
+                        retriever=vector_store.as_retriever(search_kwargs={"k": 5}),
+                        return_source_documents=True,
+                        chain_type_kwargs={"prompt": PROMPT}
                     )
                     logger.info(f"Gemini QA chain initialized successfully with model: {llm.model}")
                 else:
@@ -185,7 +210,7 @@ async def upload_pdf(file: UploadFile = File(...)):
 @app.post("/chat")
 async def chat(chat_message: ChatMessage):
     """Chat with the PDF content"""
-    global qa_chain, vector_store
+    global qa_chain, vector_store, conversation_history
     
     logger.info(f"Received chat message: {chat_message.message[:100]}...")
     
@@ -194,23 +219,36 @@ async def chat(chat_message: ChatMessage):
         raise HTTPException(status_code=400, detail="No PDF uploaded yet. Please upload a PDF first.")
     
     try:
+        # Add user message to conversation history
+        conversation_history.append({"role": "user", "content": chat_message.message})
+        
         if qa_chain:
             # Use Gemini if available
             logger.info("Using Gemini QA chain for response")
             try:
-                response = qa_chain.run(chat_message.message)
+                # Get response with source documents
+                result = qa_chain({"query": chat_message.message})
+                response = result["result"]
+                source_docs = result.get("source_documents", [])
+                
+                # Extract sources from documents
                 sources = []
+                for doc in source_docs:
+                    page_num = doc.metadata.get('page', 'Unknown')
+                    sources.append(f"Page {page_num}")
+                
                 logger.info("Gemini response generated successfully")
+                
             except Exception as gemini_error:
                 logger.error(f"Gemini API error: {str(gemini_error)}")
                 # Fallback to similarity search if Gemini fails
                 logger.info("Falling back to similarity search due to Gemini error")
                 docs = vector_store.similarity_search(chat_message.message, k=3)
                 if not docs:
-                    response = "I encountered an error with the AI service. Please try again or rephrase your question."
+                    response = "Hey there! 😊 I'm having a little trouble connecting to my AI brain right now. Could you try asking your question again? Sometimes a fresh start helps!"
                     sources = []
                 else:
-                    response = "Based on the PDF content:\n\n" + "\n\n".join([doc.page_content for doc in docs])
+                    response = "Based on what I found in your PDF:\n\n" + "\n\n".join([doc.page_content for doc in docs])
                     sources = [f"Page {doc.metadata.get('page', 'Unknown')}" for doc in docs]
         else:
             # Fallback to vector similarity search
@@ -219,13 +257,20 @@ async def chat(chat_message: ChatMessage):
             logger.info(f"Found {len(docs)} relevant documents")
             
             if not docs:
-                response = "I couldn't find relevant information in the PDF to answer your question. Please try rephrasing your question or ask about a different topic."
+                response = "Hmm, I couldn't find anything directly related to that in your PDF. 🤔 Maybe try asking about a different aspect of the document, or rephrase your question? I'm here to help!"
                 sources = []
             else:
-                response = "Based on the PDF content:\n\n" + "\n\n".join([doc.page_content for doc in docs])
+                response = "Here's what I found in your PDF that might help:\n\n" + "\n\n".join([doc.page_content for doc in docs])
                 sources = [f"Page {doc.metadata.get('page', 'Unknown')}" for doc in docs]
             
             logger.info("Similarity search response generated")
+        
+        # Add AI response to conversation history
+        conversation_history.append({"role": "assistant", "content": response})
+        
+        # Keep only last 10 exchanges to manage memory
+        if len(conversation_history) > 20:  # 10 user + 10 assistant messages
+            conversation_history = conversation_history[-20:]
         
         return ChatResponse(response=response, sources=sources)
         
@@ -266,6 +311,27 @@ async def get_pdf_info():
         "model_name": model_name,
         "status": "ready"
     }
+
+@app.get("/pdf-text")
+async def get_pdf_text():
+    """Get the extracted text from the uploaded PDF"""
+    global documents
+    
+    if not documents:
+        return {"message": "No PDF uploaded", "text": "", "status": "no_pdf"}
+    
+    try:
+        # Combine all document text
+        full_text = "\n\n".join([doc.page_content for doc in documents])
+        
+        return {
+            "text": full_text,
+            "pages": len(documents),
+            "status": "success"
+        }
+    except Exception as e:
+        logger.error(f"Error extracting PDF text: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error extracting PDF text: {str(e)}")
 
 @app.post("/save-annotation")
 async def save_annotation(annotation_data: dict):
