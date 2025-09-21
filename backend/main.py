@@ -78,9 +78,38 @@ async def upload_pdf(file: UploadFile = File(...)):
         
         # Load and process PDF
         logger.info("Loading PDF with PyPDFLoader")
-        loader = PyPDFLoader(tmp_file_path)
-        documents = loader.load()
-        logger.info(f"PDF loaded successfully: {len(documents)} pages")
+        try:
+            loader = PyPDFLoader(tmp_file_path)
+            documents = loader.load()
+            logger.info(f"PDF loaded successfully: {len(documents)} pages")
+        except Exception as pdf_error:
+            logger.error(f"PyPDFLoader failed: {str(pdf_error)}")
+            # Try alternative PDF loading method
+            try:
+                from langchain.document_loaders import PyMuPDFLoader
+                logger.info("Trying PyMuPDFLoader as fallback")
+                loader = PyMuPDFLoader(tmp_file_path)
+                documents = loader.load()
+                logger.info(f"PDF loaded with PyMuPDFLoader: {len(documents)} pages")
+            except Exception as fallback_error:
+                logger.error(f"PyMuPDFLoader also failed: {str(fallback_error)}")
+                raise HTTPException(status_code=400, detail=f"Could not read PDF file. Please ensure it's a valid PDF with readable text. Error: {str(pdf_error)}")
+        
+        # Validate that we have documents with content
+        if not documents:
+            raise HTTPException(status_code=400, detail="PDF appears to be empty or corrupted. Please try a different PDF file.")
+        
+        # Check if documents have actual content
+        valid_documents = []
+        for doc in documents:
+            if doc.page_content and doc.page_content.strip():
+                valid_documents.append(doc)
+        
+        if not valid_documents:
+            raise HTTPException(status_code=400, detail="PDF contains no readable text. Please ensure the PDF has selectable text content.")
+        
+        documents = valid_documents
+        logger.info(f"Valid documents after filtering: {len(documents)} pages")
         
         # Split documents into chunks
         logger.info("Splitting documents into chunks")
@@ -91,17 +120,41 @@ async def upload_pdf(file: UploadFile = File(...)):
         splits = text_splitter.split_documents(documents)
         logger.info(f"Documents split into {len(splits)} chunks")
         
+        # Validate chunks have content
+        valid_splits = []
+        for split in splits:
+            if split.page_content and split.page_content.strip():
+                valid_splits.append(split)
+        
+        if not valid_splits:
+            raise HTTPException(status_code=400, detail="PDF text could not be processed into meaningful chunks. Please try a different PDF.")
+        
+        splits = valid_splits
+        logger.info(f"Valid chunks after filtering: {len(splits)} chunks")
+        
         # Create embeddings and vector store
         logger.info("Creating embeddings and vector store")
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
-        )
-        
-        vector_store = Chroma.from_documents(
-            documents=splits,
-            embedding=embeddings
-        )
-        logger.info("Vector store created successfully")
+        try:
+            embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2"
+            )
+            
+            # Test embeddings generation with a small sample first
+            test_text = splits[0].page_content[:100] if splits else "test"
+            test_embedding = embeddings.embed_query(test_text)
+            
+            if not test_embedding or len(test_embedding) == 0:
+                raise HTTPException(status_code=500, detail="Failed to generate embeddings. Please try again.")
+            
+            vector_store = Chroma.from_documents(
+                documents=splits,
+                embedding=embeddings
+            )
+            logger.info("Vector store created successfully")
+            
+        except Exception as embedding_error:
+            logger.error(f"Embedding generation error: {str(embedding_error)}")
+            raise HTTPException(status_code=500, detail=f"Failed to create embeddings: {str(embedding_error)}")
         
         # Initialize QA chain with Gemini
         gemini_key = os.getenv("GEMINI_API_KEY")
@@ -321,12 +374,21 @@ async def get_pdf_text():
         return {"message": "No PDF uploaded", "text": "", "status": "no_pdf"}
     
     try:
-        # Combine all document text
-        full_text = "\n\n".join([doc.page_content for doc in documents])
+        # Combine all document text, filtering out empty content
+        valid_texts = []
+        for doc in documents:
+            if doc.page_content and doc.page_content.strip():
+                valid_texts.append(doc.page_content.strip())
+        
+        if not valid_texts:
+            return {"message": "No readable text found in PDF", "text": "", "status": "no_text"}
+        
+        full_text = "\n\n".join(valid_texts)
         
         return {
             "text": full_text,
             "pages": len(documents),
+            "valid_pages": len(valid_texts),
             "status": "success"
         }
     except Exception as e:
