@@ -6,6 +6,9 @@ import tempfile
 from typing import List, Optional
 import json
 import logging
+import subprocess
+import threading
+import time
 from pydantic import BaseModel
 from langchain.document_loaders import PyPDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -46,6 +49,11 @@ documents = []
 vector_store = None
 qa_chain = None
 conversation_history = []  # Store conversation context
+
+# Global variables for speech process management
+speech_process = None
+speech_thread = None
+speech_mode_active = False
 
 class ChatMessage(BaseModel):
     message: str
@@ -394,6 +402,89 @@ async def get_pdf_text():
     except Exception as e:
         logger.error(f"Error extracting PDF text: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error extracting PDF text: {str(e)}")
+
+def start_speech_process():
+    """Start the speech.py process in a separate thread"""
+    global speech_process, speech_thread, speech_mode_active
+    
+    if speech_mode_active:
+        return False  # Already running
+    
+    try:
+        # Start speech.py as a subprocess
+        speech_process = subprocess.Popen(
+            ['python', 'speech.py'],
+            cwd=os.path.dirname(os.path.abspath(__file__)),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        
+        speech_mode_active = True
+        logger.info("Speech process started successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Failed to start speech process: {str(e)}")
+        speech_mode_active = False
+        return False
+
+def stop_speech_process():
+    """Stop the speech.py process"""
+    global speech_process, speech_thread, speech_mode_active
+    
+    if not speech_mode_active:
+        return True  # Already stopped
+    
+    try:
+        if speech_process:
+            speech_process.terminate()
+            speech_process.wait(timeout=5)
+            speech_process = None
+        
+        speech_mode_active = False
+        logger.info("Speech process stopped successfully")
+        return True
+    except Exception as e:
+        logger.error(f"Error stopping speech process: {str(e)}")
+        # Force kill if terminate didn't work
+        if speech_process:
+            speech_process.kill()
+            speech_process = None
+        speech_mode_active = False
+        return False
+
+@app.post("/speech-mode/start")
+async def start_speech_mode():
+    """Start speech mode by launching speech.py"""
+    global speech_mode_active
+    
+    if speech_mode_active:
+        return {"message": "Speech mode is already active", "status": "already_active"}
+    
+    success = start_speech_process()
+    if success:
+        return {"message": "Speech mode started successfully", "status": "started"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to start speech mode")
+
+@app.post("/speech-mode/stop")
+async def stop_speech_mode():
+    """Stop speech mode"""
+    global speech_mode_active
+    
+    success = stop_speech_process()
+    if success:
+        return {"message": "Speech mode stopped successfully", "status": "stopped"}
+    else:
+        return {"message": "Speech mode was not running", "status": "not_running"}
+
+@app.get("/speech-mode/status")
+async def get_speech_mode_status():
+    """Get current speech mode status"""
+    return {
+        "speech_mode_active": speech_mode_active,
+        "status": "active" if speech_mode_active else "inactive"
+    }
 
 @app.post("/save-annotation")
 async def save_annotation(annotation_data: dict):

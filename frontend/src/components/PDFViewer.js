@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
-import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, Upload, FileText, X, RotateCcw } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, Upload, FileText, X, RotateCcw, PenTool, Palette, Eraser, Save } from 'lucide-react';
 import axios from 'axios';
 
 // Set up PDF.js worker
@@ -16,6 +16,25 @@ const PDFViewer = ({ file, onPDFUpload }) => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState('');
   const [pageInput, setPageInput] = useState('');
+
+  // Drawing functionality state
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
+  const [selectedColor, setSelectedColor] = useState('#3b82f6');
+  const [pencilSize, setPencilSize] = useState(3);
+  const [isDrawing, setIsDrawing] = useState(false);
+  const canvasRef = useRef(null);
+  const contextRef = useRef(null);
+
+  // Available colors and sizes
+  const colors = [
+    { name: 'Blue', value: '#3b82f6' },
+    { name: 'Red', value: '#ef4444' },
+    { name: 'Green', value: '#10b981' },
+    { name: 'Purple', value: '#8b5cf6' },
+    { name: 'Black', value: '#1f2937' }
+  ];
+
+  const pencilSizes = [1, 3, 5, 8, 12];
 
   const onDocumentLoadSuccess = ({ numPages }) => {
     setNumPages(numPages);
@@ -110,6 +129,115 @@ const PDFViewer = ({ file, onPDFUpload }) => {
     // Reset the current PDF
     onPDFUpload(null, null);
   };
+
+  // Drawing functionality
+  const startDrawing = ({ nativeEvent }) => {
+    if (!isDrawingMode || !canvasRef.current) return;
+
+    const { offsetX, offsetY } = nativeEvent;
+    const canvas = canvasRef.current;
+    const context = canvas.getContext('2d');
+
+    context.beginPath();
+    context.moveTo(offsetX, offsetY);
+    context.lineWidth = pencilSize;
+    context.lineCap = 'round';
+    context.strokeStyle = selectedColor;
+    contextRef.current = context;
+    setIsDrawing(true);
+  };
+
+  const draw = ({ nativeEvent }) => {
+    if (!isDrawing || !isDrawingMode || !contextRef.current) return;
+
+    const { offsetX, offsetY } = nativeEvent;
+    const context = contextRef.current;
+
+    context.lineTo(offsetX, offsetY);
+    context.stroke();
+  };
+
+  const stopDrawing = () => {
+    if (contextRef.current) {
+      contextRef.current.closePath();
+    }
+    setIsDrawing(false);
+  };
+
+  const clearDrawing = () => {
+    if (canvasRef.current) {
+      const canvas = canvasRef.current;
+      const context = canvas.getContext('2d');
+      context.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  const saveDrawing = () => {
+    if (canvasRef.current) {
+      const canvas = canvasRef.current;
+      const link = document.createElement('a');
+      link.download = `drawing_page_${pageNumber}.png`;
+      link.href = canvas.toDataURL();
+      link.click();
+    }
+  };
+
+  const toggleDrawingMode = () => {
+    setIsDrawingMode(!isDrawingMode);
+    if (!isDrawingMode) {
+      // Initialize canvas when entering drawing mode
+      setTimeout(() => {
+        if (canvasRef.current) {
+          const canvas = canvasRef.current;
+          const container = canvas.parentElement;
+          if (container) {
+            const rect = container.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+
+            const context = canvas.getContext('2d');
+            context.lineCap = 'round';
+            context.lineJoin = 'round';
+          }
+        }
+      }, 100);
+    }
+  };
+
+  // Resize canvas when scale changes or page changes
+  useEffect(() => {
+    if (isDrawingMode && canvasRef.current) {
+      const canvas = canvasRef.current;
+      const container = canvas.parentElement;
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+
+        // Clear any existing drawing when resizing
+        const context = canvas.getContext('2d');
+        context.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+  }, [scale, isDrawingMode, pageNumber]);
+
+  // Initialize canvas when PDF loads
+  useEffect(() => {
+    if (isDrawingMode && numPages && canvasRef.current) {
+      const canvas = canvasRef.current;
+      const container = canvas.parentElement;
+      if (container) {
+        const rect = container.getBoundingClientRect();
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+
+        const context = canvas.getContext('2d');
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        context.clearRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+  }, [numPages, isDrawingMode]);
 
   // Show upload area if no file is uploaded
   if (!file) {
@@ -268,6 +396,82 @@ const PDFViewer = ({ file, onPDFUpload }) => {
         </div>
 
         <div className="flex items-center space-x-2">
+          {/* Drawing Tools */}
+          <div className="flex items-center space-x-2 border-l border-gray-300 pl-2 ml-2">
+            <button
+              onClick={toggleDrawingMode}
+              className={`p-1 rounded transition-colors ${
+                isDrawingMode
+                  ? 'text-primary-600 bg-primary-50'
+                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+              }`}
+              title={isDrawingMode ? 'Exit Drawing Mode' : 'Enter Drawing Mode'}
+            >
+              <PenTool className="h-4 w-4" />
+            </button>
+
+            {isDrawingMode && (
+              <>
+                {/* Color Picker */}
+                <div className="flex items-center space-x-1">
+                  {colors.map((color) => (
+                    <button
+                      key={color.value}
+                      onClick={() => setSelectedColor(color.value)}
+                      className={`w-6 h-6 rounded-full border-2 transition-all ${
+                        selectedColor === color.value
+                          ? 'border-gray-800 scale-110'
+                          : 'border-gray-300 hover:scale-105'
+                      }`}
+                      style={{ backgroundColor: color.value }}
+                      title={color.name}
+                    />
+                  ))}
+                </div>
+
+                {/* Pencil Size Selector */}
+                <div className="flex items-center space-x-1">
+                  {pencilSizes.map((size) => (
+                    <button
+                      key={size}
+                      onClick={() => setPencilSize(size)}
+                      className={`w-8 h-8 rounded border-2 transition-all ${
+                        pencilSize === size
+                          ? 'border-primary-600 bg-primary-50'
+                          : 'border-gray-300 hover:border-gray-400'
+                      }`}
+                      title={`Size ${size}`}
+                    >
+                      <div
+                        className="w-full h-full rounded-full bg-current opacity-60"
+                        style={{
+                          transform: `scale(${size / 8})`,
+                          backgroundColor: selectedColor
+                        }}
+                      />
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={clearDrawing}
+                  className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
+                  title="Clear Drawing"
+                >
+                  <Eraser className="h-4 w-4" />
+                </button>
+
+                <button
+                  onClick={saveDrawing}
+                  className="p-1 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
+                  title="Save Drawing"
+                >
+                  <Save className="h-4 w-4" />
+                </button>
+              </>
+            )}
+          </div>
+
           <span className="text-xs text-gray-500 truncate max-w-32">
             {file.name}
           </span>
@@ -289,10 +493,10 @@ const PDFViewer = ({ file, onPDFUpload }) => {
       </div>
 
       {/* PDF Display */}
-      <div className="flex-1 flex justify-center overflow-auto bg-gray-100">
-        <div className="max-h-full w-full">
+      <div className="flex-1 flex justify-center items-start overflow-auto bg-gray-100 p-4">
+        <div className="relative">
           {loading && (
-            <div className="flex items-center justify-center h-full">
+            <div className="flex items-center justify-center h-96">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
               <span className="ml-3 text-gray-600">Loading PDF...</span>
             </div>
@@ -307,12 +511,31 @@ const PDFViewer = ({ file, onPDFUpload }) => {
             }}
             loading={null}
           >
-            <Page
-              pageNumber={pageNumber}
-              scale={scale}
-              renderTextLayer={false}
-              renderAnnotationLayer={false}
-            />
+            <div className="relative">
+              <Page
+                pageNumber={pageNumber}
+                scale={scale}
+                renderTextLayer={false}
+                renderAnnotationLayer={false}
+              />
+              {/* Drawing Canvas Overlay */}
+              {isDrawingMode && (
+                <canvas
+                  ref={canvasRef}
+                  className="absolute top-0 left-0 cursor-crosshair"
+                  onMouseDown={startDrawing}
+                  onMouseMove={draw}
+                  onMouseUp={stopDrawing}
+                  onMouseLeave={stopDrawing}
+                  style={{
+                    pointerEvents: isDrawingMode ? 'auto' : 'none',
+                    zIndex: 10,
+                    width: '100%',
+                    height: '100%'
+                  }}
+                />
+              )}
+            </div>
           </Document>
         </div>
       </div>

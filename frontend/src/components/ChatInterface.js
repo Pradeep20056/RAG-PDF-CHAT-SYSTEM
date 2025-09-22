@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, User, Loader2, Copy, Check, Mic, MicOff } from 'lucide-react';
+import { Send, Bot, User, Loader2, Copy, Check, Mic, MicOff, Radio, MessageSquare } from 'lucide-react';
 import axios from 'axios';
 
 const ChatInterface = () => {
@@ -11,6 +11,8 @@ const ChatInterface = () => {
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [recognition, setRecognition] = useState(null);
+  const [speechMode, setSpeechMode] = useState(false);
+  const [speechModeLoading, setSpeechModeLoading] = useState(false);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -141,8 +143,64 @@ const ChatInterface = () => {
     setError('');
   };
 
+  const toggleSpeechMode = async () => {
+    if (speechModeLoading) return;
+
+    setSpeechModeLoading(true);
+    try {
+      if (speechMode) {
+        // Stop speech mode
+        const response = await axios.post('/speech-mode/stop');
+        if (response.data.status === 'stopped' || response.data.status === 'not_running') {
+          setSpeechMode(false);
+        }
+      } else {
+        // Start speech mode
+        const response = await axios.post('/speech-mode/start');
+        if (response.data.status === 'started') {
+          setSpeechMode(true);
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling speech mode:', error);
+      setError('Failed to toggle speech mode. Please try again.');
+    } finally {
+      setSpeechModeLoading(false);
+    }
+  };
+
   return (
     <div className="h-full flex flex-col">
+      {/* Speech Mode Toggle Button */}
+      <div className="p-4 border-b border-gray-200 bg-white">
+        <div className="flex justify-center">
+          <button
+            onClick={toggleSpeechMode}
+            disabled={speechModeLoading}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-full font-medium transition-all ${
+              speechMode
+                ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+            } ${speechModeLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+            title={speechMode ? 'Switch to Chat Mode' : 'Switch to Speech Mode'}
+          >
+            {speechModeLoading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : speechMode ? (
+              <MessageSquare className="h-4 w-4" />
+            ) : (
+              <Radio className="h-4 w-4" />
+            )}
+            <span>
+              {speechModeLoading
+                ? (speechMode ? 'Stopping Speech Mode...' : 'Starting Speech Mode...')
+                : (speechMode ? 'Chat Mode' : 'Speech Mode')
+              }
+            </span>
+          </button>
+        </div>
+      </div>
+
       {/* Chat Messages - Full Height */}
       <div className="flex-1 overflow-y-auto p-4 space-y-3">
           {messages.length === 0 ? (
@@ -236,6 +294,44 @@ const ChatInterface = () => {
           <div ref={messagesEndRef} />
         </div>
 
+        {/* Speech Mode UI */}
+        {speechMode && (
+          <div className="flex-1 flex items-center justify-center p-8">
+            <div className="text-center">
+              <div className="relative mb-8">
+                <div className="w-48 h-48 mx-auto bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center shadow-lg">
+                  <div className="w-32 h-32 bg-white rounded-full flex items-center justify-center">
+                    <Radio className="h-16 w-16 text-blue-600" />
+                  </div>
+                </div>
+                {/* Animated pulse rings */}
+                <div className="absolute inset-0 w-48 h-48 mx-auto rounded-full border-4 border-blue-300 animate-ping opacity-20"></div>
+                <div className="absolute inset-0 w-48 h-48 mx-auto rounded-full border-4 border-purple-300 animate-ping opacity-10" style={{animationDelay: '0.5s'}}></div>
+              </div>
+
+              <h2 className="text-2xl font-bold text-gray-800 mb-4">Speech Mode Active</h2>
+              <p className="text-gray-600 mb-6 max-w-md mx-auto">
+                I'm listening and ready to help! Speak naturally and I'll respond with information from your PDF.
+              </p>
+
+              <div className="flex items-center justify-center space-x-4 text-sm text-gray-500">
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                  <span>Listening</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" style={{animationDelay: '0.5s'}}></div>
+                  <span>Processing</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <div className="w-2 h-2 bg-purple-500 rounded-full animate-pulse" style={{animationDelay: '1s'}}></div>
+                  <span>Ready</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Error Display */}
         {error && (
           <div className="px-4 pb-3">
@@ -245,8 +341,9 @@ const ChatInterface = () => {
           </div>
         )}
 
-        {/* Chat Input */}
-        <div className="p-4 border-t border-gray-200 bg-white">
+        {/* Chat Input - Only show when not in speech mode */}
+        {!speechMode && (
+          <div className="p-4 border-t border-gray-200 bg-white">
           <form onSubmit={handleSendMessage} className="flex space-x-3">
             <div className="flex-1 relative">
               <textarea
@@ -285,6 +382,7 @@ const ChatInterface = () => {
             </button>
           </form>
         </div>
+        )}
     </div>
   );
 };
