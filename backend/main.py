@@ -63,6 +63,30 @@ class ChatResponse(BaseModel):
     response: str
     sources: List[str] = []
 
+def build_conversation_context(max_exchanges=3):
+    """Build conversation context from recent history for RAG queries"""
+    if not conversation_history:
+        return ""
+
+    # Get the last N exchanges (N user + N assistant messages)
+    recent_history = conversation_history[-max_exchanges*2:]
+
+    context_parts = []
+    for msg in recent_history:
+        role = msg.get('role', 'unknown')
+        content = msg.get('content', '').strip()
+
+        if content:
+            if role == 'user':
+                context_parts.append(f"User: {content}")
+            elif role == 'assistant':
+                context_parts.append(f"Assistant: {content}")
+
+    # Join with newlines and add context marker
+    if context_parts:
+        return "Previous conversation:\n" + "\n".join(context_parts) + "\n"
+    return ""
+
 @app.post("/upload-pdf")
 async def upload_pdf(file: UploadFile = File(...)):
     """Upload and process PDF file"""
@@ -195,25 +219,27 @@ async def upload_pdf(file: UploadFile = File(...)):
                     # Create a more conversational prompt template
                     from langchain.prompts import PromptTemplate
                     
-                    # Enhanced prompt for more friendly, conversational responses
-                    prompt_template = """You are a helpful and friendly AI assistant who loves to help users understand their PDF documents. 
+                    # Enhanced prompt for conversational responses
+                    prompt_template = """You are a helpful and friendly AI assistant who loves to help users understand their PDF documents.
                     You should respond in a conversational, warm, and engaging manner - like talking to a friend who's genuinely interested in helping.
-                    
+                    Maintain context from our previous conversation to provide more relevant and coherent responses.
+
                     Use the following pieces of context from the PDF document to answer the user's question in a helpful and friendly way.
+                    Consider our conversation history to better understand what the user is asking about and provide more relevant information.
                     If you don't know the answer based on the context, just say so in a friendly manner and suggest what they might ask instead.
-                    
+
                     Context from PDF:
                     {context}
-                    
+
                     Question: {question}
-                    
+
                     Friendly Response:"""
                     
                     PROMPT = PromptTemplate(
-                        template=prompt_template, 
+                        template=prompt_template,
                         input_variables=["context", "question"]
                     )
-                    
+
                     qa_chain = RetrievalQA.from_chain_type(
                         llm=llm,
                         chain_type="stuff",
@@ -282,49 +308,57 @@ async def chat(chat_message: ChatMessage):
     try:
         # Add user message to conversation history
         conversation_history.append({"role": "user", "content": chat_message.message})
-        
+
+        # Build conversation context for RAG queries
+        conversation_context = build_conversation_context()
+
         if qa_chain:
             # Use Gemini if available
             logger.info("Using Gemini QA chain for response")
             try:
-                # Get response with source documents
-                result = qa_chain({"query": chat_message.message})
+                # Get response with source documents using conversation context
+                enhanced_query = f"{conversation_context}\n\nCurrent question: {chat_message.message}"
+                result = qa_chain.invoke({"query": enhanced_query})
                 response = result["result"]
                 source_docs = result.get("source_documents", [])
-                
+
                 # Extract sources from documents
                 sources = []
                 for doc in source_docs:
                     page_num = doc.metadata.get('page', 'Unknown')
                     sources.append(f"Page {page_num}")
-                
-                logger.info("Gemini response generated successfully")
-                
+
+                logger.info("Gemini response generated successfully with conversation context")
+
             except Exception as gemini_error:
                 logger.error(f"Gemini API error: {str(gemini_error)}")
                 # Fallback to similarity search if Gemini fails
                 logger.info("Falling back to similarity search due to Gemini error")
-                docs = vector_store.similarity_search(chat_message.message, k=3)
+                docs = vector_store.similarity_search_with_score(chat_message.message, k=5)
+                docs = [doc for doc, score in docs if score < 0.5]  # Filter by relevance
                 if not docs:
                     response = "Hey there! 😊 I'm having a little trouble connecting to my AI brain right now. Could you try asking your question again? Sometimes a fresh start helps!"
                     sources = []
                 else:
-                    response = "Based on what I found in your PDF:\n\n" + "\n\n".join([doc.page_content for doc in docs])
-                    sources = [f"Page {doc.metadata.get('page', 'Unknown')}" for doc in docs]
+                    response = "Based on our conversation and what I found in your PDF:\n\n" + "\n\n".join([doc.page_content for doc in docs[:3]])
+                    sources = [f"Page {doc.metadata.get('page', 'Unknown')}" for doc in docs[:3]]
         else:
-            # Fallback to vector similarity search
-            logger.info("Using similarity search fallback")
-            docs = vector_store.similarity_search(chat_message.message, k=3)
+            # Fallback to vector similarity search with conversation context
+            logger.info("Using similarity search fallback with conversation context")
+            enhanced_query = f"{conversation_context} {chat_message.message}"
+            docs = vector_store.similarity_search_with_score(enhanced_query, k=5)
+            # Filter by relevance score (lower is better for most embedding models)
+            docs = [doc for doc, score in docs if score < 0.5]
             logger.info(f"Found {len(docs)} relevant documents")
-            
+
             if not docs:
-                response = "Hmm, I couldn't find anything directly related to that in your PDF. 🤔 Maybe try asking about a different aspect of the document, or rephrase your question? I'm here to help!"
+                response = "Hmm, I couldn't find anything directly related to our conversation in your PDF. 🤔 Maybe try asking about a different aspect of the document, or rephrase your question? I'm here to help!"
                 sources = []
             else:
-                response = "Here's what I found in your PDF that might help:\n\n" + "\n\n".join([doc.page_content for doc in docs])
-                sources = [f"Page {doc.metadata.get('page', 'Unknown')}" for doc in docs]
-            
-            logger.info("Similarity search response generated")
+                response = "Based on our conversation, here's what I found in your PDF that might help:\n\n" + "\n\n".join([doc.page_content for doc in docs[:3]])
+                sources = [f"Page {doc.metadata.get('page', 'Unknown')}" for doc in docs[:3]]
+
+            logger.info("Similarity search response generated with conversation context")
         
         # Add AI response to conversation history
         conversation_history.append({"role": "assistant", "content": response})
