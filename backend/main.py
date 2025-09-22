@@ -166,7 +166,7 @@ async def upload_pdf(file: UploadFile = File(...)):
                 # gemini-2.0-flash-exp: Latest experimental model (Gemini 2.5 Flash equivalent)
                 # gemini-1.5-flash: Fast and efficient
                 # gemini-1.5-pro: Most capable for complex tasks
-                models_to_try = ["gemini-2.0-flash-exp", "gemini-1.5-flash", "gemini-1.5-pro"]
+                models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
                 llm = None
                 
                 for model_name in models_to_try:
