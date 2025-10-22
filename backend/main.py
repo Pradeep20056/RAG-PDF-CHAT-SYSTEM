@@ -397,7 +397,7 @@ async def get_pdf_info():
         model_name = qa_chain.llm.model
     
     return {
-        "pages": len(documents),
+        "pages": len(documents), 
         "filename": "uploaded_document.pdf",
         "vector_store_ready": vector_store is not None,
         "gemini_enabled": api_enabled,
@@ -529,4 +529,4 @@ async def save_annotation(annotation_data: dict):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=10000)
+    uvicorn.run(app, host="0.0.0.0", port=8000)
