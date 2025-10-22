@@ -38,7 +38,7 @@ app = FastAPI(title="PDF RAG Chat System", version="1.0.0")
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", os.getenv("FRONTEND_URL", "https://rag-pdf-chat-system-epyb.vercel.app")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
