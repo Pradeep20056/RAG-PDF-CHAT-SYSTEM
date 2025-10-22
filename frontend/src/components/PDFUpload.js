@@ -39,7 +39,7 @@ const PDFUpload = ({ onPDFUpload }) => {
     formData.append('file', file);
 
     try {
-      const response = await axios.post('/upload-pdf', formData, {
+      const response = await axios.post('https://rag-pdf-chat-system.onrender.com/upload-pdf', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
