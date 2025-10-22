@@ -527,6 +527,3 @@ async def save_annotation(annotation_data: dict):
     # For now, we'll just return success
     return {"message": "Annotation saved successfully", "data": annotation_data}
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
