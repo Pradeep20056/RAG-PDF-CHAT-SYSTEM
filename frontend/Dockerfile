@@ -1,24 +1,24 @@
-# Base image
+# Use Node.js LTS
 FROM node:20-alpine
 
 # Set working directory
 WORKDIR /app
 
 # Copy package files and install dependencies
-COPY package*.json ./
+COPY package.json package-lock.json* ./
 RUN npm install
 
-# Copy all frontend code
+# Copy the rest of the frontend source code
 COPY . .
 
-# Build React app
+# Build the React app
 RUN npm run build
 
-# Serve the build folder using a lightweight web server
+# Use a lightweight server to serve the build
 RUN npm install -g serve
 
-# Expose port
+# Expose port 3000
 EXPOSE 3000
 
-# Run the frontend
-CMD ["serve", "-s", "dist", "-l", "3000"]
+# Serve the build folder
+CMD ["serve", "-s", "build", "-l", "3000"]
