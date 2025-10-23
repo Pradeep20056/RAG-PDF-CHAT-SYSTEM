@@ -102,7 +102,7 @@ const ChatInterface = () => {
     setError('');
 
     try {
-      const response = await axios.post('https://rag-pdf-chat-system.onrender.com/chat', {
+      const response = await axios.post('http://127.0.0.1:8000/chat', {
         message: inputMessage,
       });
 
@@ -150,13 +150,13 @@ const ChatInterface = () => {
     try {
       if (speechMode) {
         // Stop speech mode
-        const response = await axios.post('https://rag-pdf-chat-system.onrender.com/speech-mode/stop');
+        const response = await axios.post('http://127.0.0.1:8000/speech-mode/stop');
         if (response.data.status === 'stopped' || response.data.status === 'not_running') {
           setSpeechMode(false);
         }
       } else {
         // Start speech mode
-        const response = await axios.post('https://rag-pdf-chat-system.onrender.com/speech-mode/start');
+        const response = await axios.post('http://127.0.0.1:8000/speech-mode/start');
         if (response.data.status === 'started') {
           setSpeechMode(true);
         }

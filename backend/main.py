@@ -10,10 +10,10 @@ import subprocess
 import threading
 import time
 from pydantic import BaseModel
-from langchain.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.embeddings import HuggingFaceEmbeddings
-from langchain.vectorstores import Chroma
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
 from langchain.chains import RetrievalQA
 import chromadb
 from dotenv import load_dotenv
@@ -118,7 +118,7 @@ async def upload_pdf(file: UploadFile = File(...)):
             logger.error(f"PyPDFLoader failed: {str(pdf_error)}")
             # Try alternative PDF loading method
             try:
-                from langchain.document_loaders import PyMuPDFLoader
+                from langchain_community.document_loaders import PyMuPDFLoader
                 logger.info("Trying PyMuPDFLoader as fallback")
                 loader = PyMuPDFLoader(tmp_file_path)
                 documents = loader.load()
@@ -526,4 +526,8 @@ async def save_annotation(annotation_data: dict):
     # In a real application, you'd save this to a database
     # For now, we'll just return success
     return {"message": "Annotation saved successfully", "data": annotation_data}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
