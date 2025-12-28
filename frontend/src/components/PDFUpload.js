@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from 'react';
 import { Upload, FileText, X } from 'lucide-react';
 import axios from 'axios';
+import API_BASE_URL from '../config';
 
 const PDFUpload = ({ onPDFUpload }) => {
   const [file, setFile] = useState(null);
@@ -39,7 +40,7 @@ const PDFUpload = ({ onPDFUpload }) => {
     formData.append('file', file);
 
     try {
-      const response = await axios.post('http://127.0.0.1:8000/upload-pdf', formData, {
+      const response = await axios.post(`${API_BASE_URL}/upload-pdf`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -116,7 +117,7 @@ const PDFUpload = ({ onPDFUpload }) => {
                 <X className="h-5 w-5 text-gray-400" />
               </button>
             </div>
-            
+
             {!isUploading ? (
               <button
                 onClick={handleUpload}

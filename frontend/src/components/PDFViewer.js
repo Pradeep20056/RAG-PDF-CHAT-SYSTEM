@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, ZoomIn, ZoomOut, Download, Upload, FileText, X, RotateCcw, PenTool, Palette, Eraser, Save } from 'lucide-react';
 import axios from 'axios';
+import API_BASE_URL from '../config';
 
 // Set up PDF.js worker
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
@@ -91,7 +92,7 @@ const PDFViewer = ({ file, onPDFUpload }) => {
     formData.append('file', selectedFile);
 
     try {
-      const response = await axios.post('http://127.0.0.1:8000/upload-pdf', formData, {
+      const response = await axios.post(`${API_BASE_URL}/upload-pdf`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -400,11 +401,10 @@ const PDFViewer = ({ file, onPDFUpload }) => {
           <div className="flex items-center space-x-2 border-l border-gray-300 pl-2 ml-2">
             <button
               onClick={toggleDrawingMode}
-              className={`p-1 rounded transition-colors ${
-                isDrawingMode
-                  ? 'text-primary-600 bg-primary-50'
-                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
-              }`}
+              className={`p-1 rounded transition-colors ${isDrawingMode
+                ? 'text-primary-600 bg-primary-50'
+                : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                }`}
               title={isDrawingMode ? 'Exit Drawing Mode' : 'Enter Drawing Mode'}
             >
               <PenTool className="h-4 w-4" />
@@ -418,11 +418,10 @@ const PDFViewer = ({ file, onPDFUpload }) => {
                     <button
                       key={color.value}
                       onClick={() => setSelectedColor(color.value)}
-                      className={`w-6 h-6 rounded-full border-2 transition-all ${
-                        selectedColor === color.value
-                          ? 'border-gray-800 scale-110'
-                          : 'border-gray-300 hover:scale-105'
-                      }`}
+                      className={`w-6 h-6 rounded-full border-2 transition-all ${selectedColor === color.value
+                        ? 'border-gray-800 scale-110'
+                        : 'border-gray-300 hover:scale-105'
+                        }`}
                       style={{ backgroundColor: color.value }}
                       title={color.name}
                     />
@@ -435,11 +434,10 @@ const PDFViewer = ({ file, onPDFUpload }) => {
                     <button
                       key={size}
                       onClick={() => setPencilSize(size)}
-                      className={`w-8 h-8 rounded border-2 transition-all ${
-                        pencilSize === size
-                          ? 'border-primary-600 bg-primary-50'
-                          : 'border-gray-300 hover:border-gray-400'
-                      }`}
+                      className={`w-8 h-8 rounded border-2 transition-all ${pencilSize === size
+                        ? 'border-primary-600 bg-primary-50'
+                        : 'border-gray-300 hover:border-gray-400'
+                        }`}
                       title={`Size ${size}`}
                     >
                       <div
