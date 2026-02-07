@@ -298,3 +298,4 @@ For support and questions:
 - [ ] Collaborative whiteboarding
 - [ ] Integration with cloud storage
 - [ ] Advanced RAG techniques (hybrid search, re-ranking)
+python -m uvicorn main:app --reload
