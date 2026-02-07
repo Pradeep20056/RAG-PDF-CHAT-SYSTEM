@@ -63,6 +63,7 @@ class ChatResponse(BaseModel):
     response: str
     sources: List[str] = []
 
+
 def build_conversation_context(max_exchanges=3):
     """Build conversation context from recent history for RAG queries"""
     if not conversation_history:
@@ -167,6 +168,7 @@ async def upload_pdf(file: UploadFile = File(...)):
         # Create embeddings and vector store
         logger.info("Creating embeddings and vector store")
         try:
+            gemini_key = os.getenv("GEMINI_API_KEY")
             embeddings = HuggingFaceEmbeddings(
                 model_name="sentence-transformers/all-MiniLM-L6-v2"
             )
@@ -189,7 +191,6 @@ async def upload_pdf(file: UploadFile = File(...)):
             raise HTTPException(status_code=500, detail=f"Failed to create embeddings: {str(embedding_error)}")
         
         # Initialize QA chain with Gemini
-        gemini_key = os.getenv("GEMINI_API_KEY")
         
         if GEMINI_AVAILABLE and gemini_key and gemini_key != "your_gemini_api_key_here":
             logger.info("Initializing Gemini QA chain")
