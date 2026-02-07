@@ -447,11 +447,12 @@ def start_speech_process():
     
     try:
         # Start speech.py as a subprocess
+        # Use DEVNULL for output to prevent the process from hanging when the buffer is full
         speech_process = subprocess.Popen(
             ['python', 'speech.py'],
             cwd=os.path.dirname(os.path.abspath(__file__)),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
             text=True
         )
         

@@ -42,7 +42,7 @@ SEND_SAMPLE_RATE = 16000
 RECEIVE_SAMPLE_RATE = 24000
 CHUNK_SIZE = 1024
 
-MODEL = "models/gemini-2.5-flash-preview-native-audio-dialog"
+MODEL = "models/gemini-2.5-flash-native-audio-preview-12-2025"
 
 DEFAULT_MODE = "screen"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
@@ -241,6 +241,7 @@ class AudioLoop:
         while True:
             msg = await self.out_queue.get()
             await self.session.send(input=msg)
+            await asyncio.sleep(0.01) # Small yield to event loop
 
     async def listen_audio(self):
         mic_info = pya.get_default_input_device_info()
@@ -260,6 +261,7 @@ class AudioLoop:
         while True:
             data = await asyncio.to_thread(self.audio_stream.read, CHUNK_SIZE, **kwargs)
             await self.out_queue.put({"data": data, "mime_type": "audio/pcm"})
+            await asyncio.sleep(0) # Yield to event loop
 
     async def receive_audio(self):
         """Background task to reads from the websocket and write pcm chunks to the output queue"""
@@ -270,7 +272,7 @@ class AudioLoop:
                     await self.audio_in_queue.put(data)
                     continue
                 if text := response.text:
-                    print(text, end="")
+                    print(f"\n[AI TEXT]: {text}")
 
             # If you interrupt the model, it sends a turn_complete.
             # For interruptions to work, we need to stop playbook.
