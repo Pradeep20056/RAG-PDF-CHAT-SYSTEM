@@ -1,5 +1,0 @@
-Supported models for bidiGenerateContent:
-Name: models/gemini-2.0-flash-exp-image-generation
-Name: models/gemini-2.5-flash-native-audio-latest
-Name: models/gemini-2.5-flash-native-audio-preview-09-2025
-Name: models/gemini-2.5-flash-native-audio-preview-12-2025
