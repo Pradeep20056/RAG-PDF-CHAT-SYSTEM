@@ -14,9 +14,28 @@ from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
-from langchain.chains import RetrievalQA
 import chromadb
 from dotenv import load_dotenv
+
+class CustomQAChain:
+    def __init__(self, llm, retriever, prompt):
+        self.llm = llm
+        self.retriever = retriever
+        self.prompt = prompt
+
+    def invoke(self, inputs):
+        query = inputs.get("query", "")
+        docs = self.retriever.invoke(query)
+        context = "\n\n".join([doc.page_content for doc in docs])
+        
+        formatted_prompt = self.prompt.format(context=context, question=query)
+        response = self.llm.invoke(formatted_prompt)
+        
+        return {
+            "query": query,
+            "result": response.content if hasattr(response, 'content') else str(response),
+            "source_documents": docs
+        }
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -218,7 +237,7 @@ async def upload_pdf(file: UploadFile = File(...)):
                 
                 if llm:
                     # Create a more conversational prompt template
-                    from langchain.prompts import PromptTemplate
+                    from langchain_core.prompts import PromptTemplate
                     
                     # Enhanced prompt for conversational responses
                     prompt_template = """You are a helpful and friendly AI assistant who loves to help users understand their PDF documents.
@@ -241,12 +260,10 @@ async def upload_pdf(file: UploadFile = File(...)):
                         input_variables=["context", "question"]
                     )
 
-                    qa_chain = RetrievalQA.from_chain_type(
+                    qa_chain = CustomQAChain(
                         llm=llm,
-                        chain_type="stuff",
                         retriever=vector_store.as_retriever(search_kwargs={"k": 5}),
-                        return_source_documents=True,
-                        chain_type_kwargs={"prompt": PROMPT}
+                        prompt=PROMPT
                     )
                     logger.info(f"Gemini QA chain initialized successfully with model: {llm.model}")
                 else:
